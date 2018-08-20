@@ -1,0 +1,143 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel UpdateCenterOfMass
+#pragma kernel ComputeSpringForces
+#pragma kernel ComputeRepulsionForces
+#pragma kernel UpdatePositions
+
+void ApplyCoulombLaw(uint idx);
+void ApplyAttractionToCenter(uint idx);
+void ApplyAcceleration(uint idx, float maxVelocity);
+void ApplyVelocity(uint idx);
+
+// parameters
+float Repulsion;
+float Stiffness;
+float Damping;
+float MaxVelocity;
+float SpringLength;
+float K;
+float TimeStep;
+
+struct Node {
+	float3 transform;
+	float3 acceleration;
+	float3 velocity;
+};
+
+struct Link {
+	int from;
+	int to;
+};
+
+uint NbNodes;
+RWStructuredBuffer<Node> nodes;
+uint NbLinks;
+RWStructuredBuffer<Link> links;
+RWStructuredBuffer<float3> GraphCenterOfMass;
+
+[numthreads(64,1,1)]
+void UpdateCenterOfMass (uint3 id : SV_DispatchThreadID)
+{
+	if(id.x >= NbNodes) return;
+
+	nodes[id.x].acceleration = float3(0,0,0);
+	//GraphCenterOfMass[0] += nodes[id.x].transform;
+}
+
+[numthreads(32,1,1)]
+void ComputeSpringForces (uint3 id : SV_DispatchThreadID)
+{
+	if(id.x >= NbLinks) return;
+	/*
+	float3 d = nodes[links[id.x].from].transform - nodes[links[id.x].to].transform;
+    float displacement = SpringLength - length(d);
+    float3 direction = normalize(d);
+
+	nodes[links[id.x].from].acceleration += direction * K * displacement / 2;
+	nodes[links[id.x].to].acceleration += -1 * direction * K * displacement / 2;
+	*/
+
+	float3 springVector = nodes[links[id.x].to].transform - nodes[links[id.x].from].transform;
+	float distance = length(springVector);
+
+	nodes[links[id.x].from].acceleration += (distance / SpringLength) * springVector;
+	nodes[links[id.x].to].acceleration += (distance / SpringLength) * springVector * -1;
+}
+
+[numthreads(64,1,1)]
+void ComputeRepulsionForces (uint3 id : SV_DispatchThreadID)
+{
+	if(id.x >= NbNodes) return;
+
+	ApplyCoulombLaw(id.x);
+	//ApplyAttractionToCenter(id.x);
+}
+
+void ApplyCoulombLaw(uint idx)  {
+/*
+    for(uint i = 0; i < idx; i++)
+    {
+        float3 d = nodes[idx].transform - nodes[i].transform;
+        float distance = length(d);
+        float3 direction = normalize(d);
+
+		nodes[idx].acceleration += direction * (pow(Repulsion,2) / pow(distance,2));
+    }
+
+	for(uint i = idx + 1; i < NbNodes; i++)
+	{
+        float3 d = nodes[idx].transform - nodes[i].transform;
+        float distance = length(d);
+        float3 direction = normalize(d);
+
+		nodes[idx].acceleration += direction * (pow(Repulsion,2) / pow(distance,2));
+	}
+*/
+
+	for(uint i = 0; i < idx; i++)
+    {
+        float3 springVector = nodes[i].transform - nodes[idx].transform;
+        float distance = length(springVector);
+
+		nodes[idx].acceleration += ((-Repulsion * pow(SpringLength, 2)) / pow(distance,2)) * springVector;
+    }
+
+	for(uint i = idx + 1; i < NbNodes; i++)
+	{
+        float3 springVector = nodes[i].transform - nodes[idx].transform;
+        float distance = length(springVector);
+
+		nodes[idx].acceleration += ((-Repulsion * pow(SpringLength, 2)) / pow(distance,2)) * springVector;
+    }
+}
+
+void ApplyAttractionToCenter(uint idx) {
+    float3 centreDirection = nodes[idx].transform * -1;
+    float displacement = length(centreDirection);
+    centreDirection = normalize(centreDirection);
+	nodes[idx].acceleration += centreDirection * Stiffness * displacement * 0.4f;
+
+	//if(length(GraphCenterOfMass[0]) == 0) return;
+
+	//nodes[idx].acceleration -= normalize(GraphCenterOfMass[0]) * Stiffness;
+}
+
+[numthreads(64,1,1)]
+void UpdatePositions (uint3 id : SV_DispatchThreadID) 
+{
+	if(id.x >= NbNodes) return;
+
+	ApplyAcceleration(id.x, MaxVelocity);
+	ApplyVelocity(id.x);
+}
+
+void ApplyAcceleration(uint idx, float maxVelocity) {
+	nodes[idx].velocity += (nodes[idx].acceleration * TimeStep);
+    nodes[idx].velocity *= Damping;
+    if (length(nodes[idx].velocity) > maxVelocity) nodes[idx].velocity = normalize(nodes[idx].velocity) * maxVelocity;
+}
+
+void ApplyVelocity(uint idx) {
+    nodes[idx].transform += (nodes[idx].velocity * TimeStep);
+	//nodes[idx].acceleration = float3(0,0,0);
+}
