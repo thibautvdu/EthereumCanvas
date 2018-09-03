@@ -4,12 +4,24 @@ using System.Numerics;
 using UnityEngine;
 using UnityEngine.Events;
 
+/// <summary>
+/// Listen to Ethereum maint net for new blocks
+/// </summary>
 public class NetworkListener : MonoBehaviour {
-    public readonly string NODE_ADDRESS = "https://mainnet.infura.io";
+    [SerializeField]
+    private string nodeAddress = "https://mainnet.infura.io";
+    /// <summary>
+    /// The number of nodes to process backward from the last one on start
+    /// </summary>
+    [SerializeField]
+    private int initalNbNodes = 200;
     
     public class NewTxEvent : UnityEvent<string,string> { };
     public NewTxEvent OnNewTx { get; private set; }
 
+    /// <summary>
+    /// Last block nb
+    /// </summary>
     private BigInteger currentHeight = 0;
 
     private IEnumerator listeningCoroutine = null;
@@ -29,9 +41,9 @@ public class NetworkListener : MonoBehaviour {
 
     IEnumerator Init()
     {
-        var blockNbRequest = new EthBlockNumberUnityRequest(NODE_ADDRESS);
+        var blockNbRequest = new EthBlockNumberUnityRequest(nodeAddress);
         yield return blockNbRequest.SendRequest();
-        currentHeight = blockNbRequest.Result.Value - 200;
+        currentHeight = blockNbRequest.Result.Value - initalNbNodes;
 
         listening = true;
         listeningCoroutine = ListenForNewBlock();
@@ -43,7 +55,7 @@ public class NetworkListener : MonoBehaviour {
     {
         while (listening)
         {
-            var blockNbRequest = new EthBlockNumberUnityRequest(NODE_ADDRESS);
+            var blockNbRequest = new EthBlockNumberUnityRequest(nodeAddress);
             yield return blockNbRequest.SendRequest();
 
             while(blockNbRequest.Result.Value > currentHeight)
@@ -57,7 +69,7 @@ public class NetworkListener : MonoBehaviour {
 
     IEnumerator ProcessNewBlock(BigInteger height)
     {
-        var getBlockRequest = new EthGetBlockWithTransactionsByNumberUnityRequest(NODE_ADDRESS);
+        var getBlockRequest = new EthGetBlockWithTransactionsByNumberUnityRequest(nodeAddress);
         yield return getBlockRequest.SendRequest(new Nethereum.Hex.HexTypes.HexBigInteger(height));
 
         if (getBlockRequest.Result == null || getBlockRequest.Exception != null) yield break;

@@ -44,6 +44,7 @@ public class ForceDirectedGraph : MonoBehaviour {
     private uint computeRepulsionForcesNbThreads;
     private uint updatePositionsNbThreads;
 
+    // GPU structs
     private struct ShaderNode
     {
         public Vector3 transform;
@@ -68,7 +69,7 @@ public class ForceDirectedGraph : MonoBehaviour {
     private List<NodeLink> links = new List<NodeLink>();
     private string targetAddress;
 
-    // energy reduction
+    // Physics (energy reduction)
     private bool converged = false;
     private float step = 1 / 30f;
     private float energy = float.PositiveInfinity;
@@ -152,7 +153,7 @@ public class ForceDirectedGraph : MonoBehaviour {
             to.Init(toAddress, nodes.Count);
             nodes[toAddress] = to;
 
-            targetAddress = "mhhh";
+            targetAddress = "test";
             ResetConvergence();
         }
         else if (from == null)
@@ -188,6 +189,9 @@ public class ForceDirectedGraph : MonoBehaviour {
         return new Vector3(Random.Range(-1f, 1f), Random.Range(-1f, 1f), Random.Range(-1f, 1f));
     }
 
+    /// <summary>
+    /// Update the buffers with the current values
+    /// </summary>
     void UpdateBuffers()
     {
         // update compute buffers
@@ -253,6 +257,10 @@ public class ForceDirectedGraph : MonoBehaviour {
         }
     }
 
+    /// <summary>
+    /// On-gpu physics processing
+    /// </summary>
+    /// <param name="timeStep"></param>
     void ComputeGraph(float timeStep)
     {
         // set parameters
